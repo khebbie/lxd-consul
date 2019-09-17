@@ -1,0 +1,23 @@
+#!/sbin/openrc-run
+
+depend() {
+  need net
+}
+
+stop() {
+    ebegin "Stopping nomad server"
+    if ps | grep $(cat /run/nomad.pid) > /dev/null 2>&1
+      then
+        pkill nomad
+        rm /run/nomad.pid
+    fi
+    eend $?
+}
+
+start() {
+  ebegin "Starting nomad server"
+  
+  nohup /usr/bin/nomad agent -config=/etc/nomad.d/server.hcl > /var/log/nomad.log 2>&1 & \
+  echo $! > /run/nomad.pid
+  eend $?
+}

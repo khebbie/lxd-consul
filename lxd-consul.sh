@@ -3,10 +3,13 @@
 # DISCLAIMER: Only use for development or testing purposes. Only tested on Ubuntu 16.04 LTS.
 # AUTHOR: Mario Harvey https://marioharvey.com
 # set consul version
-consul_version='0.6.4'
+consul_version='1.6.1'
 
 # set alpine os version
-alpine_version='3.4'
+alpine_version='3.9'
+
+#set nomad version
+nomad_version='0.9.4'
 
 # container names
 names=(consul1 consul2 consul3)
@@ -58,6 +61,10 @@ output(){
 	echo "             * http://$bootstrap_ip:8500           "
 	echo "             * http://$consul2_ip:8500             "
 	echo "             * http://$consul3_ip:8500             "
+	echo '                    nomad ui links                 ' 
+	echo "             * http://$bootstrap_ip:4646           "
+	echo "             * http://$consul2_ip:4646             "
+	echo "             * http://$consul3_ip:4646             "
 	echo '***************************************************'
 }
 
@@ -143,29 +150,40 @@ create() {
       # create containers
       lxc launch images:alpine/$alpine_version/amd64 "$name" -c 'environment.GOPATH=/go' -c 'security.privileged=true'
       # make consul dirs
-      lxc exec "$name" -- sh -c "mkdir -p /consul/data /consul/server"
+      lxc exec "$name" -- sh -c "mkdir -p /consul/data /consul/server /etc/nomad.d/"
+      lxc exec "$name" -- sh -c "apk update && apk add glib"
+
   done
-  
-  lxc exec "${names[0]}" -- sh -c "echo http://dl-6.alpinelinux.org/alpine/v3.4/main > /etc/apk/repositories && \
-  echo http://dl-5.alpinelinux.org/alpine/v3.4/main >> /etc/apk/repositories && \
-  echo http://dl-4.alpinelinux.org/alpine/v3.4/main >> /etc/apk/repositories && \
-  echo http://dl-3.alpinelinux.org/alpine/v3.4/main >> /etc/apk/repositories && \
-  echo http://dl-2.alpinelinux.org/alpine/v3.4/main >> /etc/apk/repositories && \
+
+  # setup bootstrap server and get consul
+  lxc exec "${names[0]}" -- sh -c "echo http://dl-6.alpinelinux.org/alpine/v3.9/main > /etc/apk/repositories && \
+  echo http://dl-5.alpinelinux.org/alpine/v3.9/main >> /etc/apk/repositories && \
+  echo http://dl-4.alpinelinux.org/alpine/v3.9/main >> /etc/apk/repositories && \
+  echo http://dl-3.alpinelinux.org/alpine/v3.9/main >> /etc/apk/repositories && \
+  echo http://dl-2.alpinelinux.org/alpine/v3.9/main >> /etc/apk/repositories && \
   apk add ca-certificates wget --no-cache && \
   update-ca-certificates && \
   wget https://releases.hashicorp.com/consul/$consul_version/consul_\"$consul_version\"_linux_amd64.zip -O consul_$consul_version.zip && \
+  wget https://releases.hashicorp.com/nomad/$nomad_version/nomad_\"$nomad_version\"_linux_amd64.zip  -O nomad_$nomad_version.zip && \
   unzip -o consul_$consul_version.zip -d /usr/bin && \
+  unzip -o nomad_$nomad_version.zip -d /usr/bin && \
   rm -f consul_$consul_version.zip && \
+  rm -f nomad_$nomad_version.zip && \
   chmod 755 /usr/bin/consul && \
+  chmod 755 /usr/bin/nomad && \
   mkdir -p /consul/bootstrap"
 
   lxc file pull "${names[0]}"/usr/bin/consul .
+  lxc file pull "${names[0]}"/usr/bin/nomad .
 
   lxc file push --mode=0755 consul "${names[1]}"/usr/bin/consul
+  lxc file push --mode=0755 nomad "${names[1]}"/usr/bin/nomad
 
   lxc file push --mode=0755 consul "${names[2]}"/usr/bin/consul
+  lxc file push --mode=0755 nomad "${names[2]}"/usr/bin/nomad
 
   rm -f consul
+#  rm -f nomad
 
   get_all_ips
 
@@ -200,6 +218,22 @@ create() {
   #start server nodes
   lxc exec "${names[1]}" -- rc-service consul-server start
   lxc exec "${names[2]}" -- rc-service consul-server start
+
+
+  echo "deploying nomad config"
+  lxc file push config/nomad-server.hcl "${names[0]}"/etc/nomad.d/server.hcl
+  lxc file push config/nomad-server.hcl "${names[1]}"/etc/nomad.d/server.hcl
+  lxc file push config/nomad-server.hcl "${names[2]}"/etc/nomad.d/server.hcl
+
+
+  echo "starting nomad servers"
+  lxc file push config/nomad-server "${names[0]}"/etc/init.d/
+  lxc file push config/nomad-server "${names[1]}"/etc/init.d/
+  lxc file push config/nomad-server "${names[2]}"/etc/init.d/
+
+  lxc exec "${names[0]}" -- rc-service nomad-server start
+  lxc exec "${names[1]}" -- rc-service nomad-server start
+  lxc exec "${names[2]}" -- rc-service nomad-server start
   
   # cleanup
   rm -f *_consul*
