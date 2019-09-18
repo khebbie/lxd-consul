@@ -1,23 +1,27 @@
-#!/sbin/openrc-run
+[Unit]
+Description=Nomad
+Documentation=https://nomadproject.io/docs/
+Wants=network-online.target
+After=network-online.target
 
-depend() {
-  need net
-}
+# When using Nomad with Consul it is not necessary to start Consul first. These
+# lines start Consul before Nomad as an optimization to avoid Nomad logging
+# that Consul is unavailable at startup.
+#Wants=consul.service
+#After=consul.service
 
-stop() {
-    ebegin "Stopping nomad server"
-    if ps | grep $(cat /run/nomad.pid) > /dev/null 2>&1
-      then
-        pkill nomad
-        rm /run/nomad.pid
-    fi
-    eend $?
-}
+[Service]
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/usr/bin/nomad agent -config /etc/nomad.d
+KillMode=process
+KillSignal=SIGINT
+LimitNOFILE=65536
+LimitNPROC=infinity
+Restart=on-failure
+RestartSec=2
+StartLimitBurst=3
+StartLimitIntervalSec=10
+TasksMax=infinity
 
-start() {
-  ebegin "Starting nomad server"
-  
-  nohup /usr/bin/nomad agent -config=/etc/nomad.d/server.hcl > /var/log/nomad.log 2>&1 & \
-  echo $! > /run/nomad.pid
-  eend $?
-}
+[Install]
+WantedBy=multi-user.target

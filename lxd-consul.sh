@@ -74,19 +74,19 @@ start(){
 	if [ $? -gt 0 ]; then echo 'want a consul cluster? run: ./lxd-consul.sh create!'; exit 1; fi
     get_all_ips
     echo 'bringing up consul bootstrap container...'
-    lxc exec "${names[0]}" -- rc-service consul-bootstrap start > /dev/null 2>&1
+    lxc exec "${names[0]}" -- systemctl start consul-bootstrap > /dev/null 2>&1
     echo 'restarting consul server containers...'
-    lxc exec "${names[1]}" -- rc-service consul-server restart > /dev/null 2>&1
-    lxc exec "${names[2]}" -- rc-service consul-server restart > /dev/null 2>&1
+    lxc exec "${names[1]}" -- systemctl restart consul-server > /dev/null 2>&1
+    lxc exec "${names[2]}" -- systemctl restart consul-server > /dev/null 2>&1
 	output
 }
 
 stop(){
 	echo 'stopping consul containers...'
-	lxc exec "${names[2]}" -- rc-service consul-server stop > /dev/null 2>&1
-	lxc exec "${names[1]}"-- rc-service consul-server stop > /dev/null 2>&1
-	lxc exec "${names[0]}" -- rc-service consul-bootstrap stop > /dev/null 2>&1 && \
-  rc-service consul-server stop > /dev/null 2>&1
+	lxc exec "${names[2]}" -- systemctl stop consul-server > /dev/null 2>&1
+	lxc exec "${names[1]}"-- systemctl consul-server stop > /dev/null 2>&1
+	lxc exec "${names[0]}" -- systemctl consul-bootstrap stop > /dev/null 2>&1 && \
+  systemctl stop consul-server > /dev/null 2>&1
 	lxc stop "${names[0]}" "${names[1]}" "${names[2]}" > /dev/null 2>&1
 }
 
@@ -115,7 +115,7 @@ verify_running() {
        if lxc info "$name" > /dev/null 2>&1; then
         lxc start "$name" > /dev/null 2>&1
         check_one_ip "$name"  > /dev/null 2>&1
-        lxc exec "$name" -- rc-service consul-server start > /dev/null 2>&1
+        lxc exec "$name" -- systemctl start consul-server > /dev/null 2>&1
        fi
        # check for running consul agents
        if check_agent "$name" > /dev/null 2>&1; then
@@ -148,20 +148,14 @@ create() {
   for name in "${names[@]}";
     do
       # create containers
-      lxc launch images:alpine/$alpine_version/amd64 "$name" -c 'environment.GOPATH=/go' -c 'security.privileged=true'
+      lxc launch ubuntu:18.04 "$name" -c 'environment.GOPATH=/go' -c 'security.privileged=true'
       # make consul dirs
       lxc exec "$name" -- sh -c "mkdir -p /consul/data /consul/server /etc/nomad.d/"
-      lxc exec "$name" -- sh -c "apk update && apk add glib"
 
   done
 
   # setup bootstrap server and get consul
-  lxc exec "${names[0]}" -- sh -c "echo http://dl-6.alpinelinux.org/alpine/v3.9/main > /etc/apk/repositories && \
-  echo http://dl-5.alpinelinux.org/alpine/v3.9/main >> /etc/apk/repositories && \
-  echo http://dl-4.alpinelinux.org/alpine/v3.9/main >> /etc/apk/repositories && \
-  echo http://dl-3.alpinelinux.org/alpine/v3.9/main >> /etc/apk/repositories && \
-  echo http://dl-2.alpinelinux.org/alpine/v3.9/main >> /etc/apk/repositories && \
-  apk add ca-certificates wget --no-cache && \
+  lxc exec "${names[0]}" -- sh -c "apt install -y ca-certificates wget unzip && \
   update-ca-certificates && \
   wget https://releases.hashicorp.com/consul/$consul_version/consul_\"$consul_version\"_linux_amd64.zip -O consul_$consul_version.zip && \
   wget https://releases.hashicorp.com/nomad/$nomad_version/nomad_\"$nomad_version\"_linux_amd64.zip  -O nomad_$nomad_version.zip && \
@@ -183,7 +177,7 @@ create() {
   lxc file push --mode=0755 nomad "${names[2]}"/usr/bin/nomad
 
   rm -f consul
-#  rm -f nomad
+  rm -f nomad
 
   get_all_ips
 
@@ -192,16 +186,16 @@ create() {
   # move in bootstrap config into container into bootstrap directory
   lxc file push bootstrap_consul1.json "${names[0]}"/consul/bootstrap/
   # move in bootstrap init script and make executable
-  lxc file push config/consul-bootstrap "${names[0]}"/etc/init.d/
-  lxc exec "${names[0]}" -- chmod 755 /etc/init.d/consul-bootstrap
+  lxc file push config/consul-bootstrap "${names[0]}"/etc/systemd/system/consul-bootstrap.service
+  lxc exec "${names[0]}" -- chmod 755 /etc/systemd/system/consul-bootstrap.service
   # launch bootstrap if consul not already bootstrapped
   if lxc exec "${names[0]}" -- cat /consul/data/raft/peers.json > /dev/null 2>&1; then
-    lxc exec "${names[0]}" -- rc-service consul-bootstrap stop > /dev/null 2>&1
-    lxc exec "${names[0]}" -- rc-service consul-server start
+    lxc exec "${names[0]}" -- systemctl stop consul-bootstrap > /dev/null 2>&1
+    lxc exec "${names[0]}" -- systemctl start consul-server 
   else
-    lxc exec "${names[0]}" -- rc-service consul-bootstrap start
+    lxc exec "${names[0]}" -- systemctl start consul-bootstrap
   fi
-  #create server configlxc file push config/consul-server consul1/etc/init.d/  files
+  #create server configlxc file push config/consul-server consul1/etc/systemd/system/  files
   sed s/ips/"$bootstrap_ip\", \"$consul3_ip"/g config/server.json > server_consul2.json
   sed s/ips/"$bootstrap_ip\", \"$consul2_ip"/g config/server.json > server_consul3.json
   sed s/ips/"$consul2_ip\", \"$consul3_ip"/g config/server.json > server_consul1.json
@@ -210,14 +204,14 @@ create() {
   for name in "${names[@]}";
     do
     lxc file push server_"$name".json $name/consul/server/
-    lxc file push config/consul-server $name/etc/init.d/
-    lxc exec $name -- chmod 755 /etc/init.d/consul-server
+    lxc file push config/consul-server $name/etc/systemd/system/consul-server.service
+    lxc exec $name -- chmod 755 /etc/systemd/system/consul-server.service
     lxc exec $name -- rc-update add consul-server default
   done
   
   #start server nodes
-  lxc exec "${names[1]}" -- rc-service consul-server start
-  lxc exec "${names[2]}" -- rc-service consul-server start
+  lxc exec "${names[1]}" -- systemctl start consul-server
+  lxc exec "${names[2]}" -- systemctl start consul-server
 
 
   echo "deploying nomad config"
@@ -227,13 +221,23 @@ create() {
 
 
   echo "starting nomad servers"
-  lxc file push config/nomad-server "${names[0]}"/etc/init.d/
-  lxc file push config/nomad-server "${names[1]}"/etc/init.d/
-  lxc file push config/nomad-server "${names[2]}"/etc/init.d/
+  lxc file push config/nomad-server "${names[0]}"/etc/systemd/system/nomad-server.service
+  lxc exec "${names[0]}" -- chmod 755 /etc/systemd/system/nomad-server.service
 
-  lxc exec "${names[0]}" -- rc-service nomad-server start
-  lxc exec "${names[1]}" -- rc-service nomad-server start
-  lxc exec "${names[2]}" -- rc-service nomad-server start
+  lxc file push config/nomad-server "${names[1]}"/etc/systemd/system/nomad-server.service
+  lxc exec "${names[1]}" -- chmod 755 /etc/systemd/system/nomad-server.service
+
+  lxc file push config/nomad-server "${names[2]}"/etc/systemd/system/nomad-server.service
+  lxc exec "${names[2]}" -- chmod 755 /etc/systemd/system/nomad-server.service
+
+
+  lxc exec "{names[0]}" -- systemctl daemon-reload
+  lxc exec "{names[1]}" -- systemctl daemon-reload
+  lxc exec "{names[2]}" -- systemctl daemon-reload
+
+  lxc exec "${names[0]}" -- systemctl start nomad-server 
+  lxc exec "${names[1]}" -- systemctl start nomad-server 
+  lxc exec "${names[2]}" -- systemctl start nomad-server 
   
   # cleanup
   rm -f *_consul*
