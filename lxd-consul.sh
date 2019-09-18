@@ -9,7 +9,7 @@ consul_version='1.6.1'
 alpine_version='3.9'
 
 #set nomad version
-nomad_version='0.9.4'
+nomad_version='0.9.5'
 
 # container names
 names=(consul1 consul2 consul3)
@@ -230,10 +230,22 @@ create() {
   lxc file push config/nomad-server "${names[2]}"/etc/systemd/system/nomad-server.service
   lxc exec "${names[2]}" -- chmod 755 /etc/systemd/system/nomad-server.service
 
+  lxc exec "${names[0]}" -- bash -c "ufw allow from any to any port 4646 proto tcp"
+  lxc exec "${names[0]}" -- bash -c "ufw allow from any to any port 4647 proto tcp"
+  lxc exec "${names[0]}" -- bash -c "ufw allow from any to any port 4648 proto tcp"
 
-  lxc exec "{names[0]}" -- systemctl daemon-reload
-  lxc exec "{names[1]}" -- systemctl daemon-reload
-  lxc exec "{names[2]}" -- systemctl daemon-reload
+  lxc exec "${names[1]}" -- bash -c "ufw allow from any to any port 4646 proto tcp"
+  lxc exec "${names[1]}" -- bash -c "ufw allow from any to any port 4647 proto tcp"
+  lxc exec "${names[1]}" -- bash -c "ufw allow from any to any port 4648 proto tcp"
+
+  lxc exec "${names[2]}" -- bash -c "ufw allow from any to any port 4646 proto tcp"
+  lxc exec "${names[2]}" -- bash -c "ufw allow from any to any port 4647 proto tcp"
+  lxc exec "${names[2]}" -- bash -c "ufw allow from any to any port 4648 proto tcp"
+
+
+  lxc exec "${names[0]}" -- systemctl daemon-reload
+  lxc exec "${names[1]}" -- systemctl daemon-reload
+  lxc exec "${names[2]}" -- systemctl daemon-reload
 
   lxc exec "${names[0]}" -- systemctl start nomad-server 
   lxc exec "${names[1]}" -- systemctl start nomad-server 
