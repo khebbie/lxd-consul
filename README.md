@@ -1,14 +1,12 @@
 # lxd-consul
 
-Want to experiment with Consul clusters or LXD containers? Look no further.
+Want to experiment with Consul and nomad clusters or LXD containers? Look no further.
 
 lxd-consul is a bash script that will spin up a consul cluster on Ubuntu 16.04 LTS utilizing lxd containers.
 
-This script will start a 3 node consul cluster using LXD containers running Alpine Linux. Each node takes about 9MB space so its very lightweight and fast. Furthermore, the consul cluster data will persist if the system or container reboots without needing to create data mounts.
+This script will start a 3 node consul and nomad cluster using LXD containers running ubuntu Linux. The consul cluster data will persist if the system or container reboots without needing to create data mounts.
 
-lxd-consul has only been tested on Ubuntu 16.04 and should be used for dev/testing purposes.
-
-![lxd-consul running in terminal](https://marioharvey.com/content/images/2016/Jul/lxdconsul.gif)
+lxd-consul has only been tested on Ubuntu 18.04 and should be used for dev/testing purposes.
 
 #### Prerequisites
 * Ubuntu 16.04 LTS
@@ -48,7 +46,7 @@ This will bring your cluster back and the data should still be persisted.
 
 #### Why LXD instead of Docker?
 
-LXD is a very easy to use/install virtualization solution for Ubuntu users. With LXD you get all the benefits of Docker like speed, portability, isolation, and performance. However, you gain a more familiar hypervisor experience as opposed to the somewhat opinionated Docker workflow. LXD is designed to run containers which are running full operating systems which allow you to treat the container like a vm. LXD containers are smaller than traditional VM images and since they are containers they run very close to the metal. For this script, I utilized Alpine OS images which are extraordinarily minimalist images using about 3MB of disk. Only potential downside is that LXD doesn't have a declarative configuration file (Dockerfile) or as great a mindshare/ecosystem as Docker.
+LXD is a very easy to use/install containerization solution for Ubuntu users. With LXD you get all the benefits of Docker like speed, portability, isolation, and performance. LXD is designed to run containers which are running full operating systems which allow you to treat the container like a vm. LXD containers are smaller than traditional VM images and since they are containers they run very close to the metal. For this script, I utilized ubuntu images. Only potential downside is that LXD doesn't have a declarative configuration file (Dockerfile) or as great a mindshare/ecosystem as Docker.
 
 #### Further Reading
 
